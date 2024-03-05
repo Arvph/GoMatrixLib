@@ -1,4 +1,4 @@
-package p_matrix
+package matrix
 
 import (
 	"errors"
@@ -18,7 +18,7 @@ type IMatrix interface {
 	MultiplyByNumber(num float64) (IMatrix, error)
 	// GetElement(row, col int) (float64, error)
 	// SetElement(row, col int, num float64) error
-	// Print(precision int)
+	Print(precision int)
 }
 
 // Основная структура
