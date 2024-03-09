@@ -1,9 +1,10 @@
+// Библиотека, предназначенная для работы с матрицами.
 package matrix
 
 import (
-	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 )
 
 // Интерфейс IMatrix используется для создания общего контракта (набора методов),
@@ -16,9 +17,13 @@ type IMatrix interface {
 	Subtract(other IMatrix) (IMatrix, error)
 	Multiply(other IMatrix) (IMatrix, error)
 	MultiplyByNumber(num float64) (IMatrix, error)
-	// GetElement(row, col int) (float64, error)
+	GetElement(row, col int) (float64, error)
 	// SetElement(row, col int, num float64) error
+	GetRows() int
+	GetCols() int
+	Randomize() error
 	Print(precision int)
+	isValid() bool
 }
 
 // Основная структура
@@ -37,7 +42,7 @@ type SquareMatrix struct {
 // Создаем новую матрицу и инициализируем нулями
 func New(rows, cols int) (*Matrix, error) {
 	if rows < 0 || cols < 0 {
-		return nil, errors.New("invalid row or col size")
+		return nil, fmt.Errorf("invalid row or col size")
 	}
 
 	matrix := make([][]float64, rows)
@@ -54,7 +59,7 @@ func New(rows, cols int) (*Matrix, error) {
 // Создаем новую квадратную матрицу и инициализируем нулями
 func NewSqr(size int) (*SquareMatrix, error) {
 	if size < 0 {
-		return nil, errors.New("invalid row or col size")
+		return nil, fmt.Errorf("invalid row or col size")
 	}
 	matrix := make([][]float64, size)
 	for i := range matrix {
@@ -69,24 +74,24 @@ func NewSqr(size int) (*SquareMatrix, error) {
 }
 
 // Конструктор копирования other в m
-func (m *Matrix) CopyM(other IMatrix) error {
-	o, ok := other.(*Matrix)
-	if !ok {
-		return errors.New("invalid source matrix")
+func (m *Matrix) Copy(other IMatrix) error {
+	if !other.isValid() {
+		return fmt.Errorf("invalid source matrix")
 	}
-	if !o.isValid() {
-		return errors.New("invalid source matrix")
-	}
-	tmplMatrix, err := New(o.GetRows(), o.GetCols())
+	tmplMatrix, err := New(other.GetRows(), other.GetCols())
 	if err != nil {
 		return err
 	}
 
 	// Можно провести копирование срезов с использованием пакета reflect.
 	// Стоит провести бенчмарк обоих подходов и опрделеить более эффективный подход
-	for i, row := range o.matrix() {
-		for j, value := range row {
-			tmplMatrix.matrix()[i][j] = value
+	for i := 0; i < other.GetRows(); i++ {
+		for j := 0; j < other.GetCols(); j++ {
+			tmpl, err := other.GetElement(i, j)
+			if err != nil {
+				return fmt.Errorf("out of range of mstrix")
+			}
+			tmplMatrix.matrix()[i][j] = tmpl
 			// tmplMatrix.matrix()[i][j] = other.matrix()[i][j]
 		}
 	}
@@ -100,10 +105,10 @@ func (m *Matrix) CopyM(other IMatrix) error {
 func (m *Matrix) MoveM(other IMatrix) error {
 	o, ok := other.(*Matrix)
 	if !ok {
-		return errors.New("invalid source matrix")
+		return fmt.Errorf("invalid source matrix")
 	}
 	if !o.isValid() {
-		return errors.New("invalid source matrix")
+		return fmt.Errorf("invalid source matrix")
 	}
 	m.RemoveM()
 
@@ -131,26 +136,21 @@ func (m *Matrix) RemoveM() {
 
 // Equal сравнивает матрицу с другой матрицей, реализующей интерфейс IMatrix
 func (m *Matrix) Equal(other IMatrix) bool {
-	if m == nil {
+	if m == nil || other == nil {
 		return false
 	}
 
-	o, ok := other.(*Matrix)
-	if !ok {
-		return false
-	}
-
-	if o == nil {
-		return false
-	}
-
-	if m.rows_ != o.rows_ || m.cols_ != o.cols_ {
+	if m.rows_ != other.GetRows() || m.cols_ != other.GetCols() {
 		return false
 	}
 
 	for i := 0; i < m.rows_; i++ {
 		for j := 0; j < m.cols_; j++ {
-			if m.matrix_[i][j] != o.matrix_[i][j] {
+			tmpl, err := other.GetElement(i, j)
+			if err != nil {
+				return false
+			}
+			if m.matrix_[i][j] != tmpl {
 				return false
 			}
 		}
@@ -161,20 +161,20 @@ func (m *Matrix) Equal(other IMatrix) bool {
 // SumM суммирует матрицу с другой матрицей, реализующей интерфейс IMatrix, и возвращает результ
 func (m *Matrix) Sum(other IMatrix) (IMatrix, error) {
 	if m == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	o, ok := other.(*Matrix)
 	if !ok {
-		return nil, errors.New("invalid source matrix type")
+		return nil, fmt.Errorf("invalid source matrix type")
 	}
 
 	if o == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	if m.rows_ != o.rows_ || m.cols_ != o.cols_ {
-		return nil, errors.New("matrices have different sizes")
+		return nil, fmt.Errorf("matrices have different sizes")
 	}
 
 	result := make([][]float64, m.rows_)
@@ -195,20 +195,20 @@ func (m *Matrix) Sum(other IMatrix) (IMatrix, error) {
 // Subtract вычитает из матрицы другую матрицу, реализующую интерфейс IMatrix, и возвращает результ
 func (m *Matrix) Subtract(other IMatrix) (IMatrix, error) {
 	if m == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	o, ok := other.(*Matrix)
 	if !ok {
-		return nil, errors.New("invalid source matrix type")
+		return nil, fmt.Errorf("invalid source matrix type")
 	}
 
 	if o == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	if m.rows_ != o.rows_ || m.cols_ != o.cols_ {
-		return nil, errors.New("matrices have different sizes")
+		return nil, fmt.Errorf("matrices have different sizes")
 	}
 
 	result := make([][]float64, m.rows_)
@@ -229,19 +229,19 @@ func (m *Matrix) Subtract(other IMatrix) (IMatrix, error) {
 // Multiply умножает матрицу на другую матрицу, реализующую интерфейс IMatrix, и возвращает результат умножения
 func (m *Matrix) Multiply(other IMatrix) (IMatrix, error) {
 	if m == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	o, ok := other.(*Matrix)
 	if !ok {
-		return nil, errors.New("invalid source matrix type")
+		return nil, fmt.Errorf("invalid source matrix type")
 	}
 	if o == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	if m.cols_ != o.rows_ {
-		return nil, errors.New("matrices sizes do not allow multiplication")
+		return nil, fmt.Errorf("matrices sizes do not allow multiplication")
 	}
 
 	// Вычисление умножения матриц
@@ -265,7 +265,7 @@ func (m *Matrix) Multiply(other IMatrix) (IMatrix, error) {
 // MultiplyByNumber умножает матрицу на число и записывает результат в вызывающий объект
 func (m *Matrix) MultiplyByNumber(num float64) (IMatrix, error) {
 	if m == nil {
-		return nil, errors.New("invalid source matrix")
+		return nil, fmt.Errorf("invalid source matrix")
 	}
 
 	result := make([][]float64, m.rows_)
@@ -286,9 +286,9 @@ func (m *Matrix) MultiplyByNumber(num float64) (IMatrix, error) {
 // GetElement предназначен для получения значения элемента матрицы по заданным индексам строки (rows) и столбца (cols).
 func (m *Matrix) GetElement(rows, cols int) (float64, error) {
 	if !m.isValid() {
-		return 0, errors.New("invalid source matrix")
+		return 0, fmt.Errorf("invalid source matrix")
 	} else if rows < 0 || cols < 0 || rows >= m.rows_ || cols >= m.cols_ {
-		return 0, errors.New("row/col out of range")
+		return 0, fmt.Errorf("row/col out of range")
 	}
 	return m.matrix_[rows][cols], nil
 }
@@ -296,9 +296,9 @@ func (m *Matrix) GetElement(rows, cols int) (float64, error) {
 // Установка значения элемента матрицы по заданным индексам строки (rows) и столбца (cols)
 func (m *Matrix) SetElement(rows, cols int, num float64) error {
 	if !m.isValid() {
-		return errors.New("invalid source matrix")
+		return fmt.Errorf("invalid source matrix")
 	} else if rows < 0 || cols < 0 || rows >= m.rows_ || cols >= m.cols_ {
-		return errors.New("row/col out of range")
+		return fmt.Errorf("row/col out of range")
 	}
 	m.matrix_[rows][cols] = num
 	return nil
@@ -346,4 +346,19 @@ func (m *Matrix) GetCols() int {
 // matrix возвращает внутреннюю матрицу для объекта Matrix
 func (m *Matrix) matrix() [][]float64 {
 	return m.matrix_
+}
+
+// метод заполняется матрицу случайными значениями
+func (m *Matrix) Randomize() error {
+	for i := 0; i < m.rows_; i++ {
+		for j := 0; j < m.cols_; j++ {
+			m.matrix_[i][j] = float64(rand.Intn(100) + 1)
+		}
+	}
+	return nil
+}
+
+// функция вызывает метод Randomize, который заполняется матрицу случайными значениями
+func RandomMatrix(other IMatrix) error {
+	return other.Randomize()
 }
