@@ -11,7 +11,8 @@ import (
 // который должны реализовать структуры Matrix и SquareMatrix
 type IMatrix interface {
 	// CopyM(other IMatrix) error
-	MoveM(other IMatrix) error
+	Remove()
+	Move(other IMatrix) error
 	Equal(other IMatrix) bool
 	Sum(other IMatrix) (IMatrix, error)
 	Subtract(other IMatrix) (IMatrix, error)
@@ -21,6 +22,7 @@ type IMatrix interface {
 	// SetElement(row, col int, num float64) error
 	GetRows() int
 	GetCols() int
+	matrix() [][]float64
 	Randomize() error
 	Print(precision int)
 	isValid() bool
@@ -84,7 +86,7 @@ func (m *Matrix) Copy(other IMatrix) error {
 	}
 
 	// Можно провести копирование срезов с использованием пакета reflect.
-	// Стоит провести бенчмарк обоих подходов и опрделеить более эффективный подход
+	// Стоит провести бенчмарк обоих подходов и определить более эффективный
 	for i := 0; i < other.GetRows(); i++ {
 		for j := 0; j < other.GetCols(); j++ {
 			tmpl, err := other.GetElement(i, j)
@@ -92,7 +94,6 @@ func (m *Matrix) Copy(other IMatrix) error {
 				return fmt.Errorf("out of range of mstrix")
 			}
 			tmplMatrix.matrix()[i][j] = tmpl
-			// tmplMatrix.matrix()[i][j] = other.matrix()[i][j]
 		}
 	}
 	m.cols_ = tmplMatrix.cols_
@@ -102,26 +103,22 @@ func (m *Matrix) Copy(other IMatrix) error {
 }
 
 // Конструктор переноса other в m
-func (m *Matrix) MoveM(other IMatrix) error {
-	o, ok := other.(*Matrix)
-	if !ok {
+func (m *Matrix) Move(other IMatrix) error {
+	if !other.isValid() {
 		return fmt.Errorf("invalid source matrix")
 	}
-	if !o.isValid() {
-		return fmt.Errorf("invalid source matrix")
-	}
-	m.RemoveM()
+	m.Remove()
 
-	m.cols_ = o.GetCols()
-	m.rows_ = o.GetRows()
-	m.matrix_ = o.matrix()
+	m.cols_ = other.GetCols()
+	m.rows_ = other.GetRows()
+	m.matrix_ = other.matrix()
 
-	o.RemoveM()
+	other.Remove()
 	return nil
 }
 
 // Условный деструктор - освобождает ресурсы, обнуляя данные в матрице и устанавливая размеры в 0.
-func (m *Matrix) RemoveM() {
+func (m *Matrix) Remove() {
 	for i := range m.matrix_ {
 		for j := range m.matrix_[i] {
 			m.matrix_[i][j] = 0.0
