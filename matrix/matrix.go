@@ -10,7 +10,14 @@ import (
 // Интерфейс IMatrix используется для создания общего контракта (набора методов),
 // который должны реализовать структуры Matrix и SquareMatrix
 type IMatrix interface {
-	// CopyM(other IMatrix) error
+	IMatrixOperations
+	IMatrixElementAccess
+	IMatrixProperties
+	IMatrixUtility
+}
+
+// Интерфейс для основных матричных операций
+type IMatrixOperations interface {
 	Remove()
 	Move(other IMatrix) error
 	Equal(other IMatrix) bool
@@ -18,14 +25,26 @@ type IMatrix interface {
 	Subtract(other IMatrix) (IMatrix, error)
 	Multiply(other IMatrix) (IMatrix, error)
 	MultiplyByNumber(num float64) (IMatrix, error)
+}
+
+// Интерфейс для доступа к элементам матрицы
+type IMatrixElementAccess interface {
 	GetElement(row, col int) (float64, error)
-	// SetElement(row, col int, num float64) error
 	GetRows() int
 	GetCols() int
+}
+
+// Интерфейс для получения свойств матрицы
+type IMatrixProperties interface {
 	matrix() [][]float64
+	isValid() bool
+	IsEpmty() bool
+}
+
+// Интерфейс для вспомогательных функций
+type IMatrixUtility interface {
 	Randomize() error
 	Print(precision int)
-	isValid() bool
 }
 
 // Основная структура
@@ -85,8 +104,6 @@ func (m *Matrix) Copy(other IMatrix) error {
 		return err
 	}
 
-	// Можно провести копирование срезов с использованием пакета reflect.
-	// Стоит провести бенчмарк обоих подходов и определить более эффективный
 	for i := 0; i < other.GetRows(); i++ {
 		for j := 0; j < other.GetCols(); j++ {
 			tmpl, err := other.GetElement(i, j)
@@ -109,9 +126,9 @@ func (m *Matrix) Move(other IMatrix) error {
 	}
 	m.Remove()
 
-	m.cols_ = other.GetCols()
-	m.rows_ = other.GetRows()
-	m.matrix_ = other.matrix()
+	if err := m.Copy(other); err != nil {
+		return err
+	}
 
 	other.Remove()
 	return nil
@@ -304,6 +321,11 @@ func (m *Matrix) SetElement(rows, cols int, num float64) error {
 // Печатает матрицу.  precision - количество знаков после запятой
 func (m *Matrix) Print(precision int) {
 	// p_nums := 1 // количестко знаков после точки
+	if m.matrix_ == nil {
+		fmt.Println("matrix: nil")
+		return
+	}
+
 	maxColumnWidths := make([]int, len(m.matrix_[0]))
 	for _, row := range m.matrix_ {
 		for j, value := range row {
@@ -353,6 +375,10 @@ func (m *Matrix) Randomize() error {
 		}
 	}
 	return nil
+}
+
+func (m *Matrix) IsEpmty() bool {
+	return m.cols_ == 0 && m.rows_ == 0 && m.matrix_ == nil
 }
 
 // функция вызывает метод Randomize, который заполняется матрицу случайными значениями
